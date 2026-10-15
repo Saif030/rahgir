@@ -1,9 +1,11 @@
+import { useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { AlertTriangle, Compass, Info, XCircle } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { logout } from "../store/authSlice";
 import { dismissToast } from "../store/uiSlice";
 import { useRealtime } from "../realtime";
+import { playNotificationPing } from "../utils/sound";
 import ThemeToggle from "./ui/ThemeToggle";
 
 const linkCls = ({ isActive }: { isActive: boolean }) =>
@@ -24,6 +26,18 @@ export default function Layout() {
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
   const toasts = useAppSelector((s) => s.ui.toasts);
+  const lastToastIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (toasts.length > 0) {
+      const latest = toasts[toasts.length - 1];
+      if (latest && latest.id !== lastToastIdRef.current) {
+        lastToastIdRef.current = latest.id;
+        playNotificationPing();
+      }
+    }
+  }, [toasts]);
+
   useRealtime();
 
   return (
@@ -34,7 +48,7 @@ export default function Layout() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
               <Compass size={16} />
             </span>
-            EventRoute
+            Rahgir
           </Link>
           <nav className="ml-2 hidden items-center gap-0.5 md:flex" aria-label="Primary">
             <NavLink to="/" className={linkCls} end>Discover</NavLink>

@@ -1,4 +1,4 @@
-# EventRoute — Campus Event Navigation & Discovery Platform
+# Rahgir — Campus Event Navigation & Discovery Platform
 
 Monorepo: `client/` (React 18 + TS + Vite + Redux Toolkit + Tailwind + Mapbox GL JS + PWA) and
 `server/` (Express + TS + Prisma + SQLite-local/Postgres-prod + Socket.IO + JWT + Swagger).
@@ -30,7 +30,7 @@ Open http://localhost:5173. Demo logins (password `Password123!`):
 
 ```bash
 docker compose up -d postgres redis   # or use hosted Postgres/Redis
-# server: set DATABASE_URL="postgresql://eventroute:eventroute@localhost:5432/eventroute"
+# server: set DATABASE_URL="postgresql://rahgir:rahgir@localhost:5432/rahgir"
 #   and change provider in server/prisma/schema.prisma sqlite -> postgresql
 npx prisma migrate dev
 ```

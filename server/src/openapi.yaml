@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: EventRoute API
+  title: Rahgir API
   version: 0.1.0
   description: Campus Event Navigation & Discovery Platform
 servers:

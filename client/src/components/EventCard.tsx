@@ -2,7 +2,8 @@ import { useState } from "react";
 import { CalendarPlus, Check, Clock, MapPin, Mic, Zap } from "lucide-react";
 import { api } from "../api/client";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { addToItinerary, createItinerary } from "../store/itinerarySlice";
+import { addToItinerary, createItinerary, removeFromItinerary } from "../store/itinerarySlice";
+import { addRegisteredEvent } from "../store/authSlice";
 import { pushToast } from "../store/uiSlice";
 import { colorFor, type ApiEvent } from "../types";
 import { fmtRange } from "../utils/format";
@@ -18,26 +19,37 @@ export default function EventCard({ event, onSelect }: { event: ApiEvent; onSele
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
   const itineraries = useAppSelector((s) => s.itinerary.mine);
+  const activeId = useAppSelector((s) => s.itinerary.activeId);
+  const registeredEventIds = useAppSelector((s) => s.auth.registeredEventIds);
   const [busy, setBusy] = useState(false);
+
+  const activeItinerary = itineraries.find((m) => m.id === activeId) ?? itineraries[0];
+  const isAdded = activeItinerary ? activeItinerary.items.some((item) => item.eventId === event.id) : false;
+  const isRegistered = registeredEventIds.includes(event.id);
 
   const buffer = event.planOut.bufferMin ?? 15;
 
-  async function handleAdd() {
+  async function handleToggleItinerary() {
     if (!user) {
       dispatch(pushToast({ title: "Login required", body: "Log in to build an itinerary.", kind: "warn" }));
       return;
     }
     setBusy(true);
     try {
-      let itId = itineraries[0]?.id;
+      let itId = activeItinerary?.id;
       if (!itId) {
         const created = await dispatch(createItinerary("My Schedule")).unwrap();
         itId = created.id;
       }
-      await dispatch(addToItinerary({ itineraryId: itId, eventId: event.id })).unwrap();
-      dispatch(pushToast({ title: "Added to itinerary", body: event.title, kind: "info" }));
+      if (isAdded) {
+        await dispatch(removeFromItinerary({ itineraryId: itId, eventId: event.id })).unwrap();
+        dispatch(pushToast({ title: "Removed from itinerary", body: event.title, kind: "info" }));
+      } else {
+        await dispatch(addToItinerary({ itineraryId: itId, eventId: event.id })).unwrap();
+        dispatch(pushToast({ title: "Added to itinerary", body: event.title, kind: "info" }));
+      }
     } catch {
-      dispatch(pushToast({ title: "Could not add event", kind: "error" }));
+      dispatch(pushToast({ title: isAdded ? "Could not remove event" : "Could not add event", kind: "error" }));
     } finally {
       setBusy(false);
     }
@@ -48,9 +60,11 @@ export default function EventCard({ event, onSelect }: { event: ApiEvent; onSele
       dispatch(pushToast({ title: "Login required", body: "Log in to register in one click.", kind: "warn" }));
       return;
     }
+    if (isRegistered) return;
     setBusy(true);
     try {
       await api.post(`/registrations/${event.id}`, {});
+      dispatch(addRegisteredEvent(event.id));
       dispatch(pushToast({ title: "Registered", body: event.title, kind: "info" }));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? "Registration failed";
@@ -114,18 +128,41 @@ export default function EventCard({ event, onSelect }: { event: ApiEvent; onSele
       <div className="mt-3 flex gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
         <button
           disabled={busy}
-          onClick={handleAdd}
-          className="btn-ghost flex-1 !min-h-[38px] !text-[13px]"
+          onClick={handleToggleItinerary}
+          className={`btn-ghost flex-1 !min-h-[38px] !text-[13px] ${
+            isAdded
+              ? "!border-brand-500/50 !bg-brand-50 !text-brand-700 hover:!bg-brand-100 dark:!border-brand-500/40 dark:!bg-brand-950/40 dark:!text-brand-300 dark:hover:!bg-brand-900/50 font-semibold"
+              : ""
+          }`}
+          title={isAdded ? `Added to ${activeItinerary?.name ?? "itinerary"} (click to remove)` : `Add to ${activeItinerary?.name ?? "itinerary"}`}
         >
-          <CalendarPlus size={14} />
-          Add
+          {isAdded ? (
+            <>
+              <Check size={14} className="text-brand-600 dark:text-brand-400" />
+              Added
+            </>
+          ) : (
+            <>
+              <CalendarPlus size={14} />
+              Add
+            </>
+          )}
         </button>
         <button
-          disabled={busy || event.availability === "full"}
+          disabled={busy || isRegistered || event.availability === "full"}
           onClick={handleRegister}
-          className="btn-primary flex-1 !min-h-[38px] !text-[13px]"
+          className={`flex-1 !min-h-[38px] !text-[13px] ${
+            isRegistered
+              ? "inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-default"
+              : "btn-primary"
+          }`}
         >
-          {event.availability === "full" ? (
+          {isRegistered ? (
+            <>
+              <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+              Registered
+            </>
+          ) : event.availability === "full" ? (
             "Full"
           ) : (
             <>

@@ -1,4 +1,4 @@
-// EventRoute rich demo seed.
+// Rahgir rich demo seed.
 // 15 venues · ~110 events (past + 14 days future, incl. full / cancelled / moved)
 // 6 users · ~30 registrations · 3 demo itineraries (one with conflicts) · crowd time-series.
 import bcrypt from "bcryptjs";

@@ -6,9 +6,10 @@ interface AuthState {
   user: User | null;
   status: "idle" | "loading" | "failed";
   error: string | null;
+  registeredEventIds: string[];
 }
 
-const initialState: AuthState = { user: null, status: "idle", error: null };
+const initialState: AuthState = { user: null, status: "idle", error: null, registeredEventIds: [] };
 
 export const bootstrapAuth = createAsyncThunk("auth/bootstrap", async () => {
   if (!localStorage.getItem("er_access")) return null;
@@ -34,6 +35,16 @@ export const register = createAsyncThunk(
   },
 );
 
+export const fetchUserRegistrations = createAsyncThunk("auth/fetchRegistrations", async () => {
+  if (!localStorage.getItem("er_access")) return [];
+  try {
+    const { data } = await api.get("/users/history");
+    return (data as { eventId: string }[]).map((r) => r.eventId);
+  } catch {
+    return [];
+  }
+});
+
 export const logout = createAsyncThunk("auth/logout", async () => {
   const refresh = localStorage.getItem("er_refresh");
   try {
@@ -48,7 +59,13 @@ export const logout = createAsyncThunk("auth/logout", async () => {
 const slice = createSlice({
   name: "auth",
   initialState,
-  reducers: {},
+  reducers: {
+    addRegisteredEvent(state, action: { payload: string }) {
+      if (!state.registeredEventIds.includes(action.payload)) {
+        state.registeredEventIds.push(action.payload);
+      }
+    },
+  },
   extraReducers: (b) => {
     b.addCase(bootstrapAuth.fulfilled, (s, a) => {
       s.user = a.payload;
@@ -80,10 +97,15 @@ const slice = createSlice({
       s.status = "failed";
       s.error = (a.error.message ?? "Registration failed") as string;
     });
+    b.addCase(fetchUserRegistrations.fulfilled, (s, a) => {
+      s.registeredEventIds = a.payload;
+    });
     b.addCase(logout.fulfilled, (s) => {
       s.user = null;
+      s.registeredEventIds = [];
     });
   },
 });
 
+export const { addRegisteredEvent } = slice.actions;
 export default slice.reducer;

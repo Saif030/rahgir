@@ -3,9 +3,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: eventroute
-      POSTGRES_PASSWORD: eventroute
-      POSTGRES_DB: eventroute
+      POSTGRES_USER: rahgir
+      POSTGRES_PASSWORD: rahgir
+      POSTGRES_DB: rahgir
     ports:
       - "5432:5432"
     volumes:

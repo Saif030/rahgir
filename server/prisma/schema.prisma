@@ -1,4 +1,4 @@
-// EventRoute Prisma schema.
+// Rahgir Prisma schema.
 // Local dev uses SQLite (no Docker needed). For production Postgres:
 //   1. change provider to "postgresql"
 //   2. set DATABASE_URL to postgres connection string
