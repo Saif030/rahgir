@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: EventRoute API
+  version: 0.1.0
+  description: Campus Event Navigation & Discovery Platform
+servers:
+  - url: http://localhost:4000
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/auth/register:
+    post:
+      summary: Register (role ATTENDEE|ORGANISER|ADMIN)
+      responses:
+        '201':
+          description: Created
+  /api/auth/login:
+    post:
+      summary: Login, returns JWT
+      responses:
+        '200':
+          description: OK
+  /api/auth/refresh:
+    post:
+      summary: Rotate refresh token
+      responses:
+        '200':
+          description: OK
+  /api/events:
+    get:
+      summary: List events with filters
+      parameters:
+        - { name: category, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: date, in: query, schema: { type: string } }
+        - { name: time, in: query, schema: { type: string } }
+        - { name: capacity, in: query, schema: { type: string } }
+        - { name: difficulty, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create event (ORGANISER/ADMIN)
+      responses:
+        '201':
+          description: Created
+  /api/events/{id}:
+    get:
+      summary: Event details
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+  /api/venues:
+    get:
+      summary: List venues
+      responses:
+        '200':
+          description: OK
+  /api/itineraries:
+    get:
+      summary: My itineraries
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create itinerary
+      responses:
+        '201':
+          description: Created
+  /api/routes/optimize:
+    post:
+      summary: Optimize travel sequence for eventIds
+      responses:
+        '200':
+          description: OK
+  /api/routes/between/{v1}/{v2}:
+    get:
+      summary: Route between two venues
+      parameters:
+        - { name: v1, in: path, required: true, schema: { type: string } }
+        - { name: v2, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK

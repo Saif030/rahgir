@@ -1,0 +1,113 @@
+EventRoute - Campus Event Navigation & Discovery Platform
+Hackathon PPT Content (Slide 2 to Slide 6)
+==================================================
+
+--------------------------------------------------
+Slide 2 - Problem
+--------------------------------------------------
+Problem Statement:
+- Students miss campus events due to poor discovery, clashing timings, confusing venues, and no navigation guidance.
+- Organizers lack real-time tools to manage crowd and cancellations.
+
+Target Users:
+- Students / Attendees (primary) - general, tech, wellness personas
+- Event Organisers and Clubs
+- Campus Admins
+
+Existing Gap:
+- Google Forms + WhatsApp groups = fragmented discovery, no filters or search
+- Google Maps = outdoor only, no indoor / building-floor navigation
+- No itinerary planner with conflict + travel-time check
+- No real-time cancel/move alerts or crowd density info
+- No route optimizer with food-break planning
+
+--------------------------------------------------
+Slide 3 - Proposed Solution
+--------------------------------------------------
+Solution Overview:
+- EventRoute = Discover + Plan + Navigate + Get Notified
+- One PWA for all campus events with 3D maps, smart itineraries, and live updates.
+
+Key Features (working in prototype):
+1. Discovery: filters by category/date/time/capacity, list+grid+detail, availability badges (full/almost-full/available)
+2. 3D Campus Map: Mapbox GL, category markers, crowd rings
+3. Smart Itinerary: CRUD, drag-drop reorder, conflict detection, .ics export
+4. Route Optimizer: buffer time, departure/arrival times, leave reminders + eatery stops
+5. Realtime: Socket.IO - cancel/move, itinerary-affected, crowd toasts
+6. Organiser Dashboard: event CRUD, cancel/restore, crowd publish, broadcast
+7. PWA Offline + AR Preview (camera + compass)
+
+User Journey / Workflow:
+Login (attendee@test.com) -> Discover [filter Tech/Wellness]
+-> Register (1-click, auto-fill) -> Add to Itinerary
+-> Optimize Route (buffers + eatery gap) -> Navigate 3D Map
+-> Live Toast if Cancelled -> Re-plan
+Organiser: Create Event -> Publish Crowd -> Broadcast
+
+--------------------------------------------------
+Slide 4 - Technology
+--------------------------------------------------
+Tech Stack:
+- Frontend: React 18 + TypeScript + Vite + Redux Toolkit + Tailwind + Mapbox GL JS + PWA + Socket.IO-client
+- Backend: Express + TypeScript + Prisma + Zod + JWT (15m/7d rotation) + Socket.IO + Swagger
+- DB/Cache: SQLite (dev) / Postgres (prod) + Redis (fallback to in-memory) + RouteCache
+- DevOps: Monorepo npm workspaces, Docker Compose (postgres:16, redis:7), Jest + Vitest
+
+Architecture / Workflow:
+Client :5173 --axios/websocket--> Server :4000 --Prisma--> DB
+- Redux + Realtime Hook on client
+- RateLimit + Auth + Cache (60s) on server
+- Mapbox Directions -> OSRM -> Haversine (fallback chain for routing)
+
+AI/ML/APIs or Other Technologies:
+- Mapbox Directions + Matrix API (road geometry), OSRM free fallback
+- Custom algorithm: optimizeRoute() - greedy feasible + 2-opt with time-windows
+- estimateLeg() - cache-first routing with geometry persistence
+- findConflicts() - overlap detection, haversineM() distance
+- JWT auth with rotation, Swagger docs, PWA service workers
+
+--------------------------------------------------
+Slide 5 - Innovation & Impact
+--------------------------------------------------
+USP (Unique Selling Proposition):
+- Only solution with Indoor+Outdoor hybrid stitching (indoorGraphId) + 3D map
+- Time-aware routing, not just shortest path - buffers + feasibility warnings
+- Eatery-aware gaps (>=45 min auto-suggests food stop)
+- Realtime itinerary-affected alerts, not just generic broadcast
+- Works offline (PWA) + AR navigation preview - zero extra hardware
+
+Scalability:
+- Stateless Express + Redis cache + RouteCache table - tested 100 concurrent requests
+- Postgres + Prisma migrate-ready, multi-campus by adding campusId
+- Role-based single-table auth scales to clubs/sponsors
+
+Expected Impact:
+- +40% event footfall (better discovery + reminders)
+- -60% late arrivals (travel + buffer guidance)
+- -80% confusion during cancellations (live push)
+
+Business / Implementation Potential:
+- SaaS for colleges/fests: organiser premium analytics
+- Food partners (eatery stops) + sponsor slots
+- Deployable in 1 day per campus (seed script: 15 venues, 102 events)
+
+--------------------------------------------------
+Slide 6 - Prototype & Execution
+--------------------------------------------------
+Wireframes / Prototype (Live Demo):
+- / Discovery grid + filters -> /map 3D crowd map -> /itineraries drag-drop + optimize -> /organiser CRUD -> /ar preview
+- Demo logins: attendee@test.com / organiser@test.com / admin@test.com - password: Password123!
+- Swagger: :4000/api-docs, Health: /api/health
+
+Implementation Plan (Done):
+1. Backend: auth, events, venues, itineraries, routes, crowd, seed - DONE
+2. Frontend: 7 pages, Redux, realtime toasts, MapView - DONE
+3. Routing engine + cache + tests - DONE
+
+What You Aim to Build During the 24-Hour Round:
+- Polish indoor graphs for 2-3 main buildings
+- Push notifications (Web Push) + SMS via Twilio
+- AI recommender: interests -> suggested itinerary [next]
+- Admin analytics: footfall heatmap from crowd samples
+
+Closing line: Never miss a campus moment again - EventRoute.

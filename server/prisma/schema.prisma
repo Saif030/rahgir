@@ -1,0 +1,142 @@
+// EventRoute Prisma schema.
+// Local dev uses SQLite (no Docker needed). For production Postgres:
+//   1. change provider to "postgresql"
+//   2. set DATABASE_URL to postgres connection string
+//   3. run `prisma migrate dev`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite has no native enums — roles/statuses are validated in Zod/middleware.
+// Allowed Role: ATTENDEE | ORGANISER | ADMIN. Allowed EventStatus: SCHEDULED | CANCELLED | MOVED.
+model User {
+  id                String         @id @default(cuid())
+  email             String         @unique
+  passwordHash      String
+  role              String         @default("ATTENDEE")
+  name              String
+  interests         String         @default("[]") // JSON array (SQLite-safe)
+  favoriteCategories String        @default("[]") // JSON array
+  createdAt         DateTime       @default(now())
+  refreshTokens     RefreshToken[]
+  itineraries       Itinerary[]
+  registrations     Registration[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Venue {
+  id          String   @id @default(cuid())
+  name        String
+  building    String
+  floor       String?
+  lat         Float
+  lng         Float
+  capacity    Int
+  amenities   String   @default("[]") // JSON array
+  eateryNearby Boolean @default(false)
+  indoorGraphId String?
+  events      Event[]
+  crowdSamples CrowdSample[]
+}
+
+model Event {
+  id               String      @id @default(cuid())
+  title            String
+  description      String
+  category         String
+  venueId          String
+  venue            Venue       @relation(fields: [venueId], references: [id])
+  startsAt         DateTime
+  endsAt           DateTime
+  capacity         Int
+  registeredCount  Int         @default(0)
+  difficulty       String      @default("Beginner")
+  speakerName      String?
+  speakerBio       String?
+  planOut          String      @default("{}") // JSON: {setupMin, bufferMin, teardownMin}
+  status           String        @default("SCHEDULED")
+  version          Int         @default(1)
+  createdById      String?
+  createdAt        DateTime    @default(now())
+  registrations    Registration[]
+  itineraryItems   ItineraryItem[]
+  crowdSamples     CrowdSample[]
+
+  @@index([category])
+  @@index([startsAt])
+  @@index([venueId])
+}
+
+model Registration {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentsUrl String  @default("[]") // JSON array of uploaded doc paths
+  autoFilled  String   @default("{}") // JSON snapshot of prefilled profile
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model Itinerary {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime        @default(now())
+  items     ItineraryItem[]
+
+  @@index([userId])
+}
+
+model ItineraryItem {
+  id          String    @id @default(cuid())
+  itineraryId String
+  itinerary   Itinerary @relation(fields: [itineraryId], references: [id], onDelete: Cascade)
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  order       Int
+  addedAt     DateTime  @default(now())
+
+  @@unique([itineraryId, eventId])
+}
+
+model CrowdSample {
+  id        String   @id @default(cuid())
+  venueId   String
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  density   Float    // 0..1
+  ts        DateTime @default(now())
+
+  @@index([venueId, ts])
+}
+
+model RouteCache {
+  id          String   @id @default(cuid())
+  fromVenueId String
+  toVenueId   String
+  mode        String   @default("walking")
+  durationSec Float
+  distanceM   Float
+  geometry    String   @default("") // GeoJSON LineString (JSON string)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([fromVenueId, toVenueId, mode])
+}

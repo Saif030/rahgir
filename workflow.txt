@@ -1,0 +1,164 @@
+EventRoute — Campus Event Navigation & Discovery Platform
+Workflow Explanation
+==================================================
+
+1. PROJECT OVERVIEW
+------------------
+Monorepo structure:
+  prototype/
+    client/  - React 18 + TypeScript + Vite + Redux Toolkit + Tailwind + Mapbox GL JS + PWA
+    server/  - Express + TypeScript + Prisma + SQLite (dev) / Postgres (prod) + Socket.IO + JWT + Swagger
+    docker-compose.yml - postgres:16 + redis:7 for production
+
+Working directory: C:/Users/Bingo/Downloads/prototype
+Client runs on :5173, Server runs on :4000.
+
+2. HIGH-LEVEL ARCHITECTURE & REQUEST FLOW
+-----------------------------------------
+Client (axios in client/src/api/client.ts)
+  -> Server createApp() in server/src/app.ts
+  -> Middleware: helmet -> cors(isAllowedOrigin) -> express.json -> morgan -> rateLimit(/api/auth)
+  -> Routes: /api/auth, /api/events, /api/venues, /api/itineraries, /api/routes, /api/crowd, /api/users, /api/registrations
+  -> Prisma ORM -> SQLite (server/prisma/dev.db) in dev / Postgres in prod
+  -> JSON response -> Redux store update -> React UI re-render
+  -> Swagger docs at /api-docs, Health at /api/health
+
+Server entry server/src/index.ts:
+  Wraps Express app in http.createServer + Socket.IO server with same CORS check.
+  Sockets join rooms: event:{id}, venue:{id}, user:{id} via subscribe:event / subscribe:venue / subscribe:user.
+
+Client entry client/src/App.tsx:
+  bootstrapAuth() on mount -> BrowserRouter -> Layout ->
+    /               -> Discovery (public)
+    /map            -> MapPage (3D map)
+    /login          -> Login
+    /register       -> Register
+    /itineraries    -> Itineraries (Protected: login required)
+    /organiser      -> Organiser (Protected roles: ORGANISER, ADMIN)
+    /ar             -> ArPreview
+
+Redux store (client/src/store/):
+  authSlice, eventsSlice, itinerarySlice, uiSlice + store.ts + hooks.ts
+Realtime hook (client/src/realtime.ts: useRealtime()):
+  Connects once via socket.io-client to VITE_API_URL (default http://localhost:4000).
+
+3. DATA MODEL (server/prisma/schema.prisma)
+-------------------------------------------
+User(id, email, passwordHash, role=ATTENDEE|ORGANISER|ADMIN, name, interests[], favoriteCategories[])
+  -> RefreshToken(userId, tokenHash, expiresAt)
+  -> Itinerary(userId, name) -> ItineraryItem(itineraryId, eventId, order) [unique itineraryId+eventId]
+  -> Registration(eventId, userId, documentsUrl[], autoFilled{}) [unique eventId+userId]
+Venue(id, name, building, floor, lat, lng, capacity, amenities[], eateryNearby, indoorGraphId)
+  -> Event + CrowdSample
+Event(id, title, description, category[Tech|Design|Business|Networking|Wellness], venueId, startsAt, endsAt,
+      capacity, registeredCount, difficulty, speakerName/Bio, planOut{}, status=SCHEDULED|CANCELLED|MOVED, version)
+CrowdSample(id, venueId, eventId?, density 0..1, ts)
+RouteCache(fromVenueId, toVenueId, mode, durationSec, distanceM, geometry GeoJSON) [unique from+to+mode]
+
+4. CORE WORKFLOWS
+-----------------
+
+A) AUTHENTICATION (server/src/routes/auth.ts)
+  1. Register: validate email/password -> bcrypt hash -> create User(ATTENDEE default) -> return JWTs.
+  2. Login: verify password -> issue access token (15m) + refresh token (7d, hashed in DB).
+  3. Refresh: verify refresh token -> rotate (delete old, issue new pair).
+  4. Logout: delete refresh token hash.
+  Middleware (middleware/auth.ts): requireAuth verifies JWT, requireRole checks ORGANISER/ADMIN.
+  Client: stores tokens, bootstrapAuth restores session on reload, Protected.tsx guards routes.
+
+B) EVENT DISCOVERY (Discovery.tsx + Filters.tsx + EventCard.tsx)
+  1. UI sets filters (category, search/q, date, time HH:MM, difficulty, capacity).
+  2. GET /api/events?... in server/src/routes/events.ts:42-98.
+  3. Check cache (lib/cache.ts - Redis or in-memory fallback) key events:list:{...}, 60s TTL. Return hit if found.
+  4. Build Prisma where: category, difficulty, date range, time overlap (startsAt<=t<=endsAt), OR title/description/speaker contains term.
+  5. Query count + findMany(include venue, orderBy startsAt, paginated page/limit).
+  6. Serialize: planOut JSON parse + availability = full (>=100%), almost-full (>=80%), available.
+  7. Cache result, return {total, page, limit, data}.
+  8. GET /api/events/:id for detail page.
+
+C) EVENT REGISTRATION (routes/registrations.ts)
+  1. POST /api/registrations {eventId} (auth required).
+  2. Check event exists and not full, check duplicate [eventId,userId].
+  3. Create Registration with documentsUrl + autoFilled profile snapshot.
+  4. Increment Event.registeredCount.
+  5. Return registration.
+
+D) MAP + ROUTING (MapPage.tsx + MapView.tsx)
+  Map: Mapbox GL 3D, venue markers colored by category, click/hover popup, crowd rings (density), needs VITE_MAPBOX_TOKEN.
+  Travel estimate (server/src/utils/geo.ts: estimateLeg(fromVenueId, toVenueId, mode)):
+    1. Memory cache check (routes:matrix:{mode}:{from}:{to}) with usable LineString geometry.
+    2. Live Mapbox Directions API (if MAPBOX_TOKEN) -> persist to cache + RouteCache DB.
+    3. Persisted RouteCache geometry from earlier live lookup.
+    4. Free OSRM fallback (router.project-osrm.org, no key).
+    5. Legacy RouteCache numbers or haversine fallback (haversineM, 80 m/min ~4.8 km/h).
+  GET /routes/between/:v1/:v2?mode=walking returns {travelMin, distanceM, source(mapbox|osrm|haversine|cache), geometry, suggestedDepartOffsetMin (+15 buffer)}.
+  POST /routes/optimize {eventIds[1..30], startAt?, bufferMin(0..120, default 15), mode?, includeEateries?}:
+    1. Fetch events with venues, validate all IDs found.
+    2. optimizeRoute() in utils/routeOptimizer.ts: sort by startsAt, greedy pick earliest feasible min-travel next, then 2-opt passes (max 4) keeping chronological feasibility.
+    3. Build legs {fromEventId, toEventId, departAt=prev.endsAt+buffer, arriveAt=departAt+travel, travelMin, distanceM, source, feasible}.
+    4. If infeasible (arrive > next.startsAt), push warning "Tight connection...".
+    5. If includeEateries and gap >=45min, suggest venue with eateryNearby.
+    6. Return {sequence[eventIds in visit order], legs, totalTravelMin, warnings, eateryStops}.
+
+E) ITINERARIES (Itineraries.tsx, routes/itineraries.ts)
+  1. CRUD: POST /api/itineraries {name}, GET /api/itineraries (own), PUT rename/reorder, DELETE.
+  2. Add/Remove items: POST /api/itineraries/:id/items {eventId}, DELETE .../items/:eventId.
+  3. Reorder via drag-drop -> PUT order array.
+  4. Conflict detection: findConflicts() sorts by startsAt, reports overlapping {a,b} pairs.
+  5. Totals/gaps calculation, .ics export via utils/ics.ts (ics lib). PDF via browser print.
+
+F) ORGANISER WORKFLOW (Organiser.tsx, role ORGANISER/ADMIN)
+  1. Event CRUD: POST /api/events (Zod eventSchema: title, description, category, venueId, startsAt, endsAt, capacity...), PUT /api/events/:id (partial + version increment + status change), DELETE.
+  2. Cancel/Restore/Move: PUT status=CANCELLED|MOVED|SCHEDULED.
+  3. On update (events.ts:157-167): invalidate events:list:* cache, emit Socket.IO event:status {eventId,status,version} to event:{id} room, find all ItineraryItems with eventId -> emit itinerary:affected to each user:{uid}.
+  4. Crowd publish: POST /api/crowd {venueId, eventId?, density}.
+  5. Broadcast: POST notify (SMTP/Twilio stub - logs recipients).
+
+G) REALTIME (server/src/lib/socket.ts, client/src/realtime.ts)
+  Server emits: event:status, itinerary:affected, crowd:update.
+  Client useRealtime():
+    socket = io(SOCKET_URL, websocket+polling)
+    on event:status -> dispatch applyRealtimeEvent, pushToast (error if CANCELLED else warn), refetch events + itineraries.
+    on itinerary:affected -> pushToast "Your itinerary is affected", refetch itineraries.
+    on crowd:update -> dispatch setCrowd({venueId, density}).
+    On login -> emit subscribe:user {userId}. subscribeVenue() for map.
+
+H) CACHING (server/src/lib/cache.ts)
+  Redis if REDIS_URL set, else in-memory Map with TTL. Used for events list (60s) and route legs (600-3600s). delPrefix("events:list:") on write.
+
+I) EXTRAS
+  PWA (vite-plugin-pwa): offline NetworkFirst for events/venues, SWR for Mapbox tiles.
+  AR Preview (ArPreview.tsx): camera + compass web approximation for direction overlay.
+  Indoor/outdoor hybrid: outdoor via Mapbox/OSRM, indoor modeled per-building via venue.indoorGraphId (extend graphs per building, stitched in geo.ts).
+
+5. RUN / DEPLOY FLOW
+-------------------
+Local Dev (Windows, no Docker, Node 22+):
+  Backend:
+    cd server
+    cp .env.example .env   # DATABASE_URL=file:./prisma/dev.db (SQLite)
+    npm install
+    npx prisma db push
+    npm run db:seed        # 15 venues, ~102 events, 6 users, registrations, 3 itineraries, crowd samples
+    npm run dev            # :4000
+  Frontend (new terminal):
+    cd client
+    echo VITE_MAPBOX_TOKEN=pk.YOUR_TOKEN > .env
+    npm install
+    npm run dev            # :5173
+  Open http://localhost:5173
+  Demo logins (password Password123!): attendee@test.com, priya@test.com, rahul@test.com, organiser@test.com, wellness-org@test.com, admin@test.com
+
+Production (Postgres + Redis via Docker):
+  docker compose up -d postgres redis
+  server: set DATABASE_URL="postgresql://eventroute:eventroute@localhost:5432/eventroute", change provider sqlite->postgresql in schema.prisma
+  npx prisma migrate dev
+  Env vars (see .env.example root/server/client): MAPBOX_TOKEN / VITE_MAPBOX_TOKEN, DATABASE_URL, REDIS_URL (optional), JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, CLIENT_ORIGIN.
+
+Tests:
+  cd server && npm test   # jest: geo, conflicts, API basics (9 tests)
+  cd client && npm test   # vitest: formatting/category utils
+Load test:
+  node -e "Promise.all(Array.from({length:100},()=>fetch('http://localhost:4000/api/health').then(r=>r.status))).then(s=>console.log('ok:',s.filter(x=>x===200).length,'/100'))"
+
+API docs: Swagger UI http://localhost:4000/api-docs (from server/src/openapi.yaml), Health /api/health.

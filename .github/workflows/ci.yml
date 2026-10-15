@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package.json
+      - run: npm ci
+        working-directory: server
+      - run: npx prisma generate
+        working-directory: server
+      - run: npx tsc -p tsconfig.json --noEmit
+        working-directory: server
+      - run: npm test
+        working-directory: server
+        env:
+          DATABASE_URL: file:./test-ci.db
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package.json
+      - run: npm ci
+        working-directory: client
+      - run: npx tsc -b
+        working-directory: client
+      - run: npm test -- --run
+        working-directory: client
+      - run: npm run build
+        working-directory: client

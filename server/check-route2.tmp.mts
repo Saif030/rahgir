@@ -1,0 +1,1 @@
+import "dotenv/config"; import { PrismaClient } from "@prisma/client"; import { estimateLeg } from "./src/utils/geo.js"; const p = new PrismaClient(); const vs = await p.venue.findMany({ take: 2 }); const leg = await estimateLeg(vs[0].id, vs[1].id, "walking"); console.log("travelMin:", leg.travelMin, "distanceM:", leg.distanceM, "source:", leg.source); await p.$disconnect();
