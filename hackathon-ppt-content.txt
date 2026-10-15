@@ -1,4 +1,4 @@
-EventRoute - Campus Event Navigation & Discovery Platform
+﻿Rahgir - Campus Event Navigation & Discovery Platform
 Hackathon PPT Content (Slide 2 to Slide 6)
 ==================================================
 
@@ -25,7 +25,7 @@ Existing Gap:
 Slide 3 - Proposed Solution
 --------------------------------------------------
 Solution Overview:
-- EventRoute = Discover + Plan + Navigate + Get Notified
+- Rahgir = Discover + Plan + Navigate + Get Notified
 - One PWA for all campus events with 3D maps, smart itineraries, and live updates.
 
 Key Features (working in prototype):
@@ -110,4 +110,4 @@ What You Aim to Build During the 24-Hour Round:
 - AI recommender: interests -> suggested itinerary [next]
 - Admin analytics: footfall heatmap from crowd samples
 
-Closing line: Never miss a campus moment again - EventRoute.
+Closing line: Never miss a campus moment again - Rahgir.

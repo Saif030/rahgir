@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarX, Clock, LayoutGrid, List, MapPin, Mic, Users, X } from "lucide-react";
+import { CalendarPlus, CalendarX, Check, Clock, LayoutGrid, List, MapPin, Mic, Users, X, Zap } from "lucide-react";
 import EventCard from "../components/EventCard";
 import Filters from "../components/Filters";
 import Badge from "../components/ui/Badge";
@@ -7,13 +7,25 @@ import Button from "../components/ui/Button";
 import EmptyState from "../components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { fetchEvents, fetchVenues, setView } from "../store/eventsSlice";
+import { addToItinerary, createItinerary, removeFromItinerary, setActive } from "../store/itinerarySlice";
+import { addRegisteredEvent } from "../store/authSlice";
+import { pushToast } from "../store/uiSlice";
+import { api } from "../api/client";
 import type { ApiEvent } from "../types";
 import { fmtRange } from "../utils/format";
 
 export default function Discovery() {
   const dispatch = useAppDispatch();
   const { items, total, status, view, filters } = useAppSelector((s) => s.events);
+  const user = useAppSelector((s) => s.auth.user);
+  const { mine, activeId } = useAppSelector((s) => s.itinerary);
+  const registeredEventIds = useAppSelector((s) => s.auth.registeredEventIds);
   const [selected, setSelected] = useState<ApiEvent | null>(null);
+  const [modalBusy, setModalBusy] = useState(false);
+
+  const activeItinerary = mine.find((m) => m.id === activeId) ?? mine[0];
+  const isSelectedAdded = selected && activeItinerary ? activeItinerary.items.some((i) => i.eventId === selected.id) : false;
+  const isSelectedRegistered = selected ? registeredEventIds.includes(selected.id) : false;
 
   useEffect(() => {
     void dispatch(fetchVenues());
@@ -22,6 +34,53 @@ export default function Discovery() {
     void dispatch(fetchEvents(filters));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
+
+  async function handleModalToggleItinerary() {
+    if (!selected) return;
+    if (!user) {
+      dispatch(pushToast({ title: "Login required", body: "Log in to build an itinerary.", kind: "warn" }));
+      return;
+    }
+    setModalBusy(true);
+    try {
+      let itId = activeItinerary?.id;
+      if (!itId) {
+        const created = await dispatch(createItinerary("My Schedule")).unwrap();
+        itId = created.id;
+      }
+      if (isSelectedAdded) {
+        await dispatch(removeFromItinerary({ itineraryId: itId, eventId: selected.id })).unwrap();
+        dispatch(pushToast({ title: "Removed from itinerary", body: selected.title, kind: "info" }));
+      } else {
+        await dispatch(addToItinerary({ itineraryId: itId, eventId: selected.id })).unwrap();
+        dispatch(pushToast({ title: "Added to itinerary", body: selected.title, kind: "info" }));
+      }
+    } catch {
+      dispatch(pushToast({ title: isSelectedAdded ? "Could not remove event" : "Could not add event", kind: "error" }));
+    } finally {
+      setModalBusy(false);
+    }
+  }
+
+  async function handleModalRegister() {
+    if (!selected) return;
+    if (!user) {
+      dispatch(pushToast({ title: "Login required", body: "Log in to register in one click.", kind: "warn" }));
+      return;
+    }
+    if (isSelectedRegistered) return;
+    setModalBusy(true);
+    try {
+      await api.post(`/registrations/${selected.id}`, {});
+      dispatch(addRegisteredEvent(selected.id));
+      dispatch(pushToast({ title: "Registered", body: selected.title, kind: "info" }));
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? "Registration failed";
+      dispatch(pushToast({ title: msg, kind: "error" }));
+    } finally {
+      setModalBusy(false);
+    }
+  }
 
   const apply = () => void dispatch(fetchEvents(filters));
 
@@ -34,6 +93,23 @@ export default function Discovery() {
             {total} event{total === 1 ? "" : "s"} · live availability
           </p>
         </div>
+        {user && mine.length > 0 && (
+          <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Selected itinerary:</span>
+            <select
+              value={activeId ?? mine[0]?.id ?? ""}
+              onChange={(e) => dispatch(setActive(e.target.value || null))}
+              className="bg-transparent font-semibold text-zinc-900 outline-none dark:text-zinc-100 cursor-pointer"
+              aria-label="Active itinerary selection"
+            >
+              {mine.map((m) => (
+                <option key={m.id} value={m.id} className="dark:bg-zinc-900">
+                  {m.name} ({m.items.length})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div
           className="ml-auto flex rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900"
           role="tablist"
@@ -158,6 +234,52 @@ export default function Discovery() {
                 Setup {selected.planOut.setupMin ?? 15}m · buffer {selected.planOut.bufferMin ?? 15}m · teardown{" "}
                 {selected.planOut.teardownMin ?? 10}m · Status: {selected.status}
               </p>
+              <div className="mt-4 flex gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <button
+                  disabled={modalBusy}
+                  onClick={handleModalToggleItinerary}
+                  className={`btn-ghost flex-1 !min-h-[38px] !text-[13px] ${
+                    isSelectedAdded
+                      ? "!border-brand-500/50 !bg-brand-50 !text-brand-700 hover:!bg-brand-100 dark:!border-brand-500/40 dark:!bg-brand-950/40 dark:!text-brand-300 dark:hover:!bg-brand-900/50 font-semibold"
+                      : ""
+                  }`}
+                  title={isSelectedAdded ? `Added to ${activeItinerary?.name ?? "itinerary"} (click to remove)` : `Add to ${activeItinerary?.name ?? "itinerary"}`}
+                >
+                  {isSelectedAdded ? (
+                    <>
+                      <Check size={14} className="text-brand-600 dark:text-brand-400" />
+                      Added
+                    </>
+                  ) : (
+                    <>
+                      <CalendarPlus size={14} />
+                      Add
+                    </>
+                  )}
+                </button>
+                <button
+                  disabled={modalBusy || isSelectedRegistered || selected.availability === "full"}
+                  onClick={handleModalRegister}
+                  className={`flex-1 !min-h-[38px] !text-[13px] ${
+                    isSelectedRegistered
+                      ? "inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-default"
+                      : "btn-primary"
+                  }`}
+                >
+                  {isSelectedRegistered ? (
+                    <>
+                      <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+                      Registered
+                    </>
+                  ) : selected.availability === "full" ? (
+                    "Full"
+                  ) : (
+                    <>
+                      <Zap size={14} /> Register
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

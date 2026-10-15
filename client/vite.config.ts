@@ -9,8 +9,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'EventRoute — Campus Event Navigation',
-        short_name: 'EventRoute',
+        name: 'Rahgir — Campus Event Navigation',
+        short_name: 'Rahgir',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
@@ -30,7 +30,7 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/events') || url.pathname.startsWith('/api/venues'),
             handler: 'NetworkFirst',
-            options: { cacheName: 'eventroute-api', networkTimeoutSeconds: 5 },
+            options: { cacheName: 'rahgir-api', networkTimeoutSeconds: 5 },
           },
         ],
       },

@@ -1,8 +1,8 @@
 {
-  "name": "eventroute",
+  "name": "rahgir",
   "private": true,
   "version": "0.1.0",
-  "description": "EventRoute - Campus Event Navigation & Discovery Platform",
+  "description": "Rahgir - Campus Event Navigation & Discovery Platform",
   "type": "module",
   "workspaces": [
     "client",

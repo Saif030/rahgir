@@ -15,7 +15,7 @@ export function buildIcs(itineraryName: string, events: IcsEventInput[]): Promis
     location: e.location ?? "",
     start: toArray(e.start),
     end: toArray(e.end),
-    productId: "eventroute/itinerary",
+    productId: "rahgir/itinerary",
     calName: itineraryName,
   }));
   return new Promise((resolve, reject) => {

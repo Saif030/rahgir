@@ -1,4 +1,4 @@
-EventRoute — Campus Event Navigation & Discovery Platform
+﻿Rahgir — Campus Event Navigation & Discovery Platform
 Workflow Explanation
 ==================================================
 
@@ -151,7 +151,7 @@ Local Dev (Windows, no Docker, Node 22+):
 
 Production (Postgres + Redis via Docker):
   docker compose up -d postgres redis
-  server: set DATABASE_URL="postgresql://eventroute:eventroute@localhost:5432/eventroute", change provider sqlite->postgresql in schema.prisma
+  server: set DATABASE_URL="postgresql://Rahgir:Rahgir@localhost:5432/Rahgir", change provider sqlite->postgresql in schema.prisma
   npx prisma migrate dev
   Env vars (see .env.example root/server/client): MAPBOX_TOKEN / VITE_MAPBOX_TOKEN, DATABASE_URL, REDIS_URL (optional), JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, CLIENT_ORIGIN.
 
